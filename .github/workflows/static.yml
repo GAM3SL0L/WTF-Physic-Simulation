@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation de Formes Dynamiques</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            display: block;
+        }
+        .controls, .shape-buttons {
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            z-index: 10;
+        }
+        .shape-buttons {
+            top: 10px;
+            gap: 10px;
+        }
+        .shape-buttons button {
+            font-size: 20px;
+            width: 50px;
+            height: 50px;
+            border: none;
+            background-color: #ddd;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .shape-buttons button:hover {
+            background-color: #ccc;
+        }
+        .controls {
+            bottom: 10px;
+            gap: 10px;
+        }
+        .controls button {
+            font-size: 20px;
+            width: 50px;
+            height: 50px;
+            border: none;
+            background-color: #ddd;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .controls button:hover {
+            background-color: #ccc;
+        }
+        .reset-page {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        .reset-page:hover {
+            background-color: #ff4d4d;
+        }
+        .gravity-controls {
+            position: absolute;
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .gravity-controls button {
+            font-size: 20px;
+            width: 50px;
+            height: 50px;
+            border: none;
+            background-color: #ddd;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .gravity-controls button:hover {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="shape-buttons">
+        <button id="shape-circle">🟠</button>
+        <button id="shape-square">🟥</button>
+        <button id="shape-triangle">🔺</button>
+    </div>
+    <div class="controls">
+        <button id="reset">↻</button>
+    </div>
+    <div class="gravity-controls">
+        <button id="up">↑</button>
+        <button id="left">←</button>
+        <button id="right">→</button>
+        <button id="down">↓</button>
+    </div>
+    <button class="reset-page" id="reset-page">Réinitialiser</button>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        const friction = 0.99;
+        const radius = 20;
+        const numShapes = 10; // Nombre de formes par clic
+        let gravityX = 0; // Gravité horizontale
+        let gravityY = 0.5; // Gravité verticale par défaut (vers le bas)
+        const rotationSpeed = 0.02; // Vitesse de rotation des triangles
+
+        // Liste pour stocker les formes
+        const shapes = [];
+        let currentShape = 'circle'; // Forme par défaut
+
+        // Fonction pour ajuster la taille du canvas
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        // Fonction pour générer une couleur aléatoire
+        function randomColor() {
+            return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+        }
+
+        // Fonction pour créer des formes
+        function createShapes(x, y, numShapes) {
+            for (let i = 0; i < numShapes; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const speed = Math.random() * 5 + 2;
+                const dx = Math.cos(angle) * speed;
+                const dy = Math.sin(angle) * speed;
+                const color = randomColor();
+                shapes.push({ x, y, dx, dy, radius, color, type: currentShape, rotation: 0 });
+            }
+        }
+
+        // Fonction pour dessiner une forme
+        function drawShape(shape) {
+            ctx.save();
+            ctx.translate(shape.x, shape.y);
+            ctx.rotate(shape.rotation);
+
+            if (shape.type === 'circle') {
+                ctx.beginPath();
+                ctx.arc(0, 0, shape.radius, 0, 2 * Math.PI);
+                ctx.fillStyle = shape.color;
+                ctx.fill();
+                ctx.closePath();
+            } else if (shape.type === 'square') {
+                ctx.fillStyle = shape.color;
+                ctx.fillRect(-shape.radius, -shape.radius, shape.radius * 2, shape.radius * 2);
+            } else if (shape.type === 'triangle') {
+                ctx.fillStyle = shape.color;
+                ctx.beginPath();
+                ctx.moveTo(0, -shape.radius);
+                ctx.lineTo(-shape.radius, shape.radius);
+                ctx.lineTo(shape.radius, shape.radius);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Fonction pour mettre à jour les formes
+        function updateShapes() {
+            shapes.forEach(shape => {
+                shape.x += shape.dx;
+                shape.y += shape.dy;
+                shape.dx += gravityX; // Appliquer la gravité horizontale
+                shape.dy += gravityY; // Appliquer la gravité verticale
+                shape.dx *= friction; // Appliquer la friction
+                shape.dy *= friction; // Appliquer la friction
+
+                // Rotation des triangles
+                if (shape.type === 'triangle') {
+                    shape.rotation += rotationSpeed;
+                }
+
+                // Vérifier la collision avec les bordures
+                if (shape.x - shape.radius <= 0) {
+                    shape.x = shape.radius;
+                    shape.dx = -shape.dx * friction;
+                } else if (shape.x + shape.radius >= width) {
+                    shape.x = width - shape.radius;
+                    shape.dx = -shape.dx * friction;
+                }
+
+                if (shape.y - shape.radius <= 0) {
+                    shape.y = shape.radius;
+                    shape.dy = -shape.dy * friction;
+                } else if (shape.y + shape.radius >= height) {
+                    shape.y = height - shape.radius;
+                    shape.dy = -shape.dy * friction;
+                }
+            });
+
+            // Vérifier les collisions entre les formes
+            for (let i = 0; i < shapes.length; i++) {
+                for (let j = i + 1; j < shapes.length; j++) {
+                    resolveCollision(shapes[i], shapes[j]);
+                }
+            }
+        }
+
+        // Fonction pour dessiner les formes
+        function drawShapes() {
+            ctx.clearRect(0, 0, width, height);
+            shapes.forEach(shape => drawShape(shape));
+        }
+
+        // Fonction d'animation
+        function animate() {
+            updateShapes();
+            drawShapes();
+            requestAnimationFrame(animate);
+        }
+
+        // Fonction pour gérer les collisions entre deux formes
+        function resolveCollision(s1, s2) {
+            if (s1.type === 'circle' && s2.type === 'circle') {
+                // Collision entre cercles
+                handleCircleCollision(s1, s2);
+            } else if (s1.type === 'square' && s2.type === 'square') {
+                // Collision entre carrés
+                handleSquareCollision(s1, s2);
+            } else if (s1.type === 'triangle' && s2.type === 'triangle') {
+                // Collision entre triangles
+                handleTriangleCollision(s1, s2);
+            } else if (s1.type === 'circle' && (s2.type === 'square' || s2.type === 'triangle')) {
+                // Collision entre cercle et autre forme
+                handleCircleCollision(s1, s2);
+            } else if ((s1.type === 'square' || s1.type === 'triangle') && s2.type === 'circle') {
+                // Collision entre autre forme et cercle
+                handleCircleCollision(s2, s1);
+            }
+        }
+
+        // Fonction pour gérer les collisions entre carrés
+        function handleSquareCollision(s1, s2) {
+            const overlapX = (s1.radius + s2.radius) - Math.abs(s1.x - s2.x);
+            const overlapY = (s1.radius + s2.radius) - Math.abs(s1.y - s2.y);
+
+            if (overlapX > 0 && overlapY > 0) {
+                if (overlapX < overlapY) {
+                    s1.x += overlapX * (s1.x < s2.x ? -1 : 1);
+                    s2.x += overlapX * (s2.x < s1.x ? -1 : 1);
+                } else {
+                    s1.y += overlapY * (s1.y < s2.y ? -1 : 1);
+                    s2.y += overlapY * (s2.y < s1.y ? -1 : 1);
+                }
+            }
+        }
+
+        // Fonction pour gérer les collisions entre triangles
+        function handleTriangleCollision(s1, s2) {
+            // Gestion de la collision entre triangles (complexe à implémenter)
+            // Ajoutez une gestion plus avancée des collisions ici si nécessaire
+        }
+
+        // Fonction pour gérer les collisions entre cercles et autres formes
+        function handleCircleCollision(circle, shape) {
+            const dx = circle.x - shape.x;
+            const dy = circle.y - shape.y;
+            const distance = Math.hypot(dx, dy);
+            const overlap = circle.radius + shape.radius - distance;
+
+            if (distance < circle.radius + shape.radius) {
+                const nx = dx / distance;
+                const ny = dy / distance;
+
+                circle.x += overlap * nx * (circle.radius / (circle.radius + shape.radius));
+                circle.y += overlap * ny * (circle.radius / (circle.radius + shape.radius));
+                shape.x -= overlap * nx * (shape.radius / (circle.radius + shape.radius));
+                shape.y -= overlap * ny * (shape.radius / (circle.radius + shape.radius));
+            }
+        }
+
+        // Événements pour sélectionner la forme à créer
+        document.getElementById('shape-circle').addEventListener('click', () => {
+            currentShape = 'circle';
+        });
+        document.getElementById('shape-square').addEventListener('click', () => {
+            currentShape = 'square';
+        });
+        document.getElementById('shape-triangle').addEventListener('click', () => {
+            currentShape = 'triangle';
+        });
+
+        // Événement pour créer des formes au clic de la souris
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            createShapes(x, y, numShapes);
+        });
+
+        // Redimensionner le canvas lorsque la fenêtre est redimensionnée
+        window.addEventListener('resize', resizeCanvas);
+
+        // Contrôles pour ajuster la gravité avec les boutons
+        document.getElementById('up').addEventListener('click', () => {
+            gravityY -= 0.1; // Gravité vers le haut
+        });
+        document.getElementById('down').addEventListener('click', () => {
+            gravityY += 0.1; // Gravité vers le bas
+        });
+        document.getElementById('left').addEventListener('click', () => {
+            gravityX -= 0.1; // Gravité vers la gauche
+        });
+        document.getElementById('right').addEventListener('click', () => {
+            gravityX += 0.1; // Gravité vers la droite
+        });
+
+        // Événement pour réinitialiser les paramètres de gravité
+        document.getElementById('reset').addEventListener('click', () => {
+            gravityX = 0; // Réinitialiser la gravité horizontale
+            gravityY = 0.5; // Réinitialiser la gravité verticale (vers le bas)
+        });
+
+        // Événement pour réinitialiser complètement la simulation
+        document.getElementById('reset-page').addEventListener('click', () => {
+            shapes.length = 0; // Supprimer toutes les formes
+            gravityX = 0; // Réinitialiser la gravité horizontale
+            gravityY = 0.5; // Réinitialiser la gravité verticale (vers le bas)
+        });
+
+        // Initialiser la taille du canvas
+        resizeCanvas();
+
+        // Démarrer l'animation
+        animate();
+    </script>
+</body>
+</html>
